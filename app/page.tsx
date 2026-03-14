@@ -7,7 +7,7 @@ export default function WaiterApp() {
   const [userName, setUserName] = useState('');
   
   // הגדרות ברירת מחדל למשמרות
-  const [days, setDays] = useState([
+  const [days, setDays] = useState<any[]>([
     { id: 1, name: 'ראשון', active: true, type: 'ערב', time: '17:00', limit: 25, waiters: [] },
     { id: 2, name: 'שני', active: true, type: 'ערב', time: '17:00', limit: 15, waiters: [] },
     { id: 3, name: 'שלישי', active: true, type: 'ערב', time: '17:00', limit: 32, waiters: [] },
