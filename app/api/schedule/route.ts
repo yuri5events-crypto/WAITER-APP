@@ -1,4 +1,4 @@
-import { createClient } from 'redis';
+import { kv } from '@vercel/kv';
 import { NextResponse } from 'next/server';
 
 const INITIAL_DATA = [
@@ -11,50 +11,43 @@ const INITIAL_DATA = [
 ];
 
 export async function GET() {
-  const client = createClient({ url: process.env.REDIS_URL });
   try {
-    await client.connect();
-    let data = await client.get('waiter_schedule');
-    if (!data) {
-      await client.set('waiter_schedule', JSON.stringify(INITIAL_DATA));
-      return NextResponse.json(INITIAL_DATA);
-    }
-    return NextResponse.json(JSON.parse(data));
+    const data = await kv.get('waiter_schedule');
+    return NextResponse.json(data || INITIAL_DATA);
   } catch (error) {
     return NextResponse.json(INITIAL_DATA);
-  } finally {
-    await client.disconnect();
   }
 }
 
 export async function POST(request: Request) {
-  const client = createClient({ url: process.env.REDIS_URL });
   try {
-    const { dayId, userName } = await request.json();
-    await client.connect();
-    const rawData = await client.get('waiter_schedule');
-    const data = rawData ? JSON.parse(rawData) : INITIAL_DATA;
+    const body = await request.json();
+    const data: any = await kv.get('waiter_schedule') || INITIAL_DATA;
     
-    const updatedData = data.map((day: any) => {
-      if (day.id === dayId && !day.waiters.includes(userName) && day.waiters.length < day.limit) {
-        return { ...day, waiters: [...day.waiters, userName] };
-      }
-      return day;
-    });
+    let updatedData;
 
-    await client.set('waiter_schedule', JSON.stringify(updatedData));
+    // בדיקה אם זו עריכת הגדרות יום או הרשמת מלצר רגילה
+    if (body.type === 'UPDATE_DAY') {
+      updatedData = data.map((day: any) => 
+        day.id === body.dayId ? { ...day, limit: parseInt(body.limit), time: body.time } : day
+      );
+    } else {
+      updatedData = data.map((day: any) => {
+        if (day.id === body.dayId && !day.waiters.includes(body.userName) && day.waiters.length < day.limit) {
+          return { ...day, waiters: [...day.waiters, body.userName] };
+        }
+        return day;
+      });
+    }
+
+    await kv.set('waiter_schedule', updatedData);
     return NextResponse.json({ success: true });
   } catch (error) {
     return NextResponse.json({ success: false }, { status: 500 });
-  } finally {
-    await client.disconnect();
   }
 }
 
 export async function DELETE() {
-  const client = createClient({ url: process.env.REDIS_URL });
-  await client.connect();
-  await client.set('waiter_schedule', JSON.stringify(INITIAL_DATA));
-  await client.disconnect();
+  await kv.set('waiter_schedule', INITIAL_DATA);
   return NextResponse.json({ success: true });
 }
