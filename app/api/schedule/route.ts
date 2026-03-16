@@ -1,11 +1,5 @@
-import { createClient } from '@vercel/kv';
+import { createClient } from 'redis';
 import { NextResponse } from 'next/server';
-
-// חיבור לפי השם שמופיע אצלך ב-Vercel
-const kv = createClient({
-  url: process.env.REDIS_URL!,
-  token: process.env.REDIS_URL!.split('@')[1].split(':')[0], // חילוץ אוטומטי של הטוקן
-});
 
 const INITIAL_DATA = [
   { id: 1, name: 'ראשון', time: '17:00', limit: 25, waiters: [] },
@@ -17,23 +11,29 @@ const INITIAL_DATA = [
 ];
 
 export async function GET() {
+  const client = createClient({ url: process.env.REDIS_URL });
   try {
-    let data = await kv.get('waiter_schedule');
+    await client.connect();
+    let data = await client.get('waiter_schedule');
     if (!data) {
-      await kv.set('waiter_schedule', INITIAL_DATA);
-      data = INITIAL_DATA;
+      await client.set('waiter_schedule', JSON.stringify(INITIAL_DATA));
+      return NextResponse.json(INITIAL_DATA);
     }
-    return NextResponse.json(data);
+    return NextResponse.json(JSON.parse(data));
   } catch (error) {
-    console.error("Connection Error:", error);
     return NextResponse.json(INITIAL_DATA);
+  } finally {
+    await client.disconnect();
   }
 }
 
 export async function POST(request: Request) {
+  const client = createClient({ url: process.env.REDIS_URL });
   try {
     const { dayId, userName } = await request.json();
-    const data: any = await kv.get('waiter_schedule') || INITIAL_DATA;
+    await client.connect();
+    const rawData = await client.get('waiter_schedule');
+    const data = rawData ? JSON.parse(rawData) : INITIAL_DATA;
     
     const updatedData = data.map((day: any) => {
       if (day.id === dayId && !day.waiters.includes(userName) && day.waiters.length < day.limit) {
@@ -42,14 +42,19 @@ export async function POST(request: Request) {
       return day;
     });
 
-    await kv.set('waiter_schedule', updatedData);
+    await client.set('waiter_schedule', JSON.stringify(updatedData));
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: "fail" }, { status: 500 });
+    return NextResponse.json({ success: false }, { status: 500 });
+  } finally {
+    await client.disconnect();
   }
 }
 
 export async function DELETE() {
-  await kv.set('waiter_schedule', INITIAL_DATA);
+  const client = createClient({ url: process.env.REDIS_URL });
+  await client.connect();
+  await client.set('waiter_schedule', JSON.stringify(INITIAL_DATA));
+  await client.disconnect();
   return NextResponse.json({ success: true });
 }
