@@ -24,18 +24,22 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { dayId, userName } = await request.json();
-  const data: any = await kv.get('waiter_schedule') || INITIAL_DATA;
-  
-  const updatedData = data.map((day: any) => {
-    if (day.id === dayId && !day.waiters.includes(userName) && day.waiters.length < day.limit) {
-      return { ...day, waiters: [...day.waiters, userName] };
-    }
-    return day;
-  });
+  try {
+    const { dayId, userName } = await request.json();
+    const data: any = await kv.get('waiter_schedule') || INITIAL_DATA;
+    
+    const updatedData = data.map((day: any) => {
+      if (day.id === dayId && !day.waiters.includes(userName) && day.waiters.length < day.limit) {
+        return { ...day, waiters: [...day.waiters, userName] };
+      }
+      return day;
+    });
 
-  await kv.set('waiter_schedule', updatedData);
-  return NextResponse.json({ success: true });
+    await kv.set('waiter_schedule', updatedData);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to save' }, { status: 500 });
+  }
 }
 
 export async function DELETE() {
