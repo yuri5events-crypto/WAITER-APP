@@ -16,7 +16,12 @@ const INITIAL_DATA = {
 export async function GET() {
   try {
     const data = await kv.get('waiter_schedule');
-    return NextResponse.json(data || INITIAL_DATA);
+    // מוודא שהנתונים קיימים ושיש להם את המבנה הנכון
+    if (!data || !data.days) {
+      await kv.set('waiter_schedule', INITIAL_DATA);
+      return NextResponse.json(INITIAL_DATA);
+    }
+    return NextResponse.json(data);
   } catch (error) {
     return NextResponse.json(INITIAL_DATA);
   }
@@ -25,25 +30,26 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const currentData: any = await kv.get('waiter_schedule') || INITIAL_DATA;
+    let currentData: any = await kv.get('waiter_schedule');
+    
+    if (!currentData || !currentData.days) {
+      currentData = INITIAL_DATA;
+    }
+
     let newData = { ...currentData };
 
-    if (body.type === 'UPDATE_DAY') {
-      newData.days = currentData.days.map((day: any) => 
-        day.id === body.dayId ? { ...day, limit: parseInt(body.limit), time: body.time } : day
-      );
-    } else if (body.type === 'UPDATE_TITLE') {
+    if (body.type === 'UPDATE_TITLE') {
       newData.title = body.title;
     } else {
-      // הרשמת מלצר רגילה
+      // הרשמה רגילה
       newData.days = currentData.days.map((day: any) => 
-        day.name === body.day ? { ...day, waiters: [...day.waiters, body.waiterName] } : day
+        day.name === body.day ? { ...day, waiters: [...(day.waiters || []), body.waiterName] } : day
       );
     }
 
     await kv.set('waiter_schedule', newData);
     return NextResponse.json(newData);
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed' }, { status: 500 });
   }
 }
