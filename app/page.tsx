@@ -137,7 +137,34 @@ export default function WaiterApp() {
                     {day.waiters.length === 0 && <span className="text-slate-300 italic text-sm">היה הראשון להירשם...</span>}
                   </div>
 
-                  <button
+<button
                     onClick={() => addWaiter(day.name)}
                     disabled={isFull}
-                    className={`w
+                    className={`w-full py-5 rounded-2xl font-black text-2xl transition-all shadow-xl flex items-center justify-center gap-3 ${
+                      isFull 
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-2 border-slate-200' 
+                        : 'bg-amber-500 text-white hover:bg-amber-600 active:scale-95 hover:shadow-amber-200 shadow-amber-100'
+                    }`}
+                  >
+                    {isFull ? <X size={28} /> : <Users size={28} />}
+                    {isFull ? 'ההרשמה הסתיימה' : 'אני רוצה להירשם'}
+                  </button>
+                  
+                  {!isFull && (
+                    <p className="text-center text-[11px] font-bold text-red-500 mt-3 animate-bounce">
+                      ⚡ שריין מקום עכשיו לפני שייתפס!
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        
+        <footer className="mt-12 text-center text-slate-400 text-sm font-medium pb-10">
+          © {new Date().getFullYear()} {data?.title} | מערכת ניהול צוות
+        </footer>
+      </div>
+    </div>
+  );
+}
