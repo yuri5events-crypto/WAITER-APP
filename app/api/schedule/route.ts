@@ -1,14 +1,17 @@
 import { kv } from '@vercel/kv';
 import { NextResponse } from 'next/server';
 
-const INITIAL_DATA = [
-  { id: 1, name: 'ראשון', time: '17:00', limit: 25, waiters: [] },
-  { id: 2, name: 'שני', time: '17:00', limit: 15, waiters: [] },
-  { id: 3, name: 'שלישי', time: '17:00', limit: 32, waiters: [] },
-  { id: 4, name: 'רביעי', time: '17:00', limit: 22, waiters: [] },
-  { id: 5, name: 'חמישי', time: '17:00', limit: 29, waiters: [] },
-  { id: 6, name: 'שישי', time: '09:30', limit: 15, waiters: [] },
-];
+const INITIAL_DATA = {
+  title: "סידור עבודה - מלצרים",
+  days: [
+    { id: 1, name: 'ראשון', time: '17:00', limit: 25, waiters: [] },
+    { id: 2, name: 'שני', time: '17:00', limit: 15, waiters: [] },
+    { id: 3, name: 'שלישי', time: '17:00', limit: 32, waiters: [] },
+    { id: 4, name: 'רביעי', time: '17:00', limit: 22, waiters: [] },
+    { id: 5, name: 'חמישי', time: '17:00', limit: 29, waiters: [] },
+    { id: 6, name: 'שישי', time: '09:30', limit: 15, waiters: [] },
+  ]
+};
 
 export async function GET() {
   try {
@@ -22,32 +25,25 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const data: any = await kv.get('waiter_schedule') || INITIAL_DATA;
-    
-    let updatedData;
+    const currentData: any = await kv.get('waiter_schedule') || INITIAL_DATA;
+    let newData = { ...currentData };
 
-    // בדיקה אם זו עריכת הגדרות יום או הרשמת מלצר רגילה
     if (body.type === 'UPDATE_DAY') {
-      updatedData = data.map((day: any) => 
+      newData.days = currentData.days.map((day: any) => 
         day.id === body.dayId ? { ...day, limit: parseInt(body.limit), time: body.time } : day
       );
+    } else if (body.type === 'UPDATE_TITLE') {
+      newData.title = body.title;
     } else {
-      updatedData = data.map((day: any) => {
-        if (day.id === body.dayId && !day.waiters.includes(body.userName) && day.waiters.length < day.limit) {
-          return { ...day, waiters: [...day.waiters, body.userName] };
-        }
-        return day;
-      });
+      // הרשמת מלצר רגילה
+      newData.days = currentData.days.map((day: any) => 
+        day.name === body.day ? { ...day, waiters: [...day.waiters, body.waiterName] } : day
+      );
     }
 
-    await kv.set('waiter_schedule', updatedData);
-    return NextResponse.json({ success: true });
+    await kv.set('waiter_schedule', newData);
+    return NextResponse.json(newData);
   } catch (error) {
-    return NextResponse.json({ success: false }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to update' }, { status: 500 });
   }
-}
-
-export async function DELETE() {
-  await kv.set('waiter_schedule', INITIAL_DATA);
-  return NextResponse.json({ success: true });
 }
