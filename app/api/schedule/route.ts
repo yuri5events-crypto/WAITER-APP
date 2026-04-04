@@ -1,8 +1,10 @@
 import { kv } from '@vercel/kv';
 import { NextResponse } from 'next/server';
 
-const INITIAL_DATA = {
-  title: "סידור עבודה - מלצרים",
+const getInitialData = (id: string) => ({
+  title: "סידור עבודה",
+  bg_color: "#ffffff",
+  text_color: "#000000",
   days: [
     { id: 1, name: 'ראשון', time: '17:00', limit: 25, waiters: [] },
     { id: 2, name: 'שני', time: '17:00', limit: 15, waiters: [] },
@@ -11,45 +13,30 @@ const INITIAL_DATA = {
     { id: 5, name: 'חמישי', time: '17:00', limit: 29, waiters: [] },
     { id: 6, name: 'שישי', time: '09:30', limit: 15, waiters: [] },
   ]
-};
+});
 
-export async function GET() {
-  try {
-    const data = await kv.get('waiter_schedule');
-    // מוודא שהנתונים קיימים ושיש להם את המבנה הנכון
-    if (!data || !data.days) {
-      await kv.set('waiter_schedule', INITIAL_DATA);
-      return NextResponse.json(INITIAL_DATA);
-    }
-    return NextResponse.json(data);
-  } catch (error) {
-    return NextResponse.json(INITIAL_DATA);
-  }
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const roomId = searchParams.get('room') || 'default';
+  const data: any = await kv.get(`schedule_${roomId}`);
+  return NextResponse.json(data || getInitialData(roomId));
 }
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    let currentData: any = await kv.get('waiter_schedule');
-    
-    if (!currentData || !currentData.days) {
-      currentData = INITIAL_DATA;
-    }
+  const body = await request.json();
+  const roomId = body.roomId || 'default';
+  let data: any = await kv.get(`schedule_${roomId}`) || getInitialData(roomId);
 
-    let newData = { ...currentData };
-
-    if (body.type === 'UPDATE_TITLE') {
-      newData.title = body.title;
-    } else {
-      // הרשמה רגילה
-      newData.days = currentData.days.map((day: any) => 
-        day.name === body.day ? { ...day, waiters: [...(day.waiters || []), body.waiterName] } : day
-      );
-    }
-
-    await kv.set('waiter_schedule', newData);
-    return NextResponse.json(newData);
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed' }, { status: 500 });
+  if (body.type === 'ADMIN_UPDATE') {
+    data = { ...data, ...body.payload };
+  } else if (body.type === 'RESET_DAY') {
+    data.days = data.days.map((d: any) => d.id === body.dayId ? { ...d, waiters: [] } : d);
+  } else if (body.type === 'REGISTER') {
+    data.days = data.days.map((d: any) => 
+      d.name === body.dayName ? { ...d, waiters: [...d.waiters, body.waiterName] } : d
+    );
   }
+
+  await kv.set(`schedule_${roomId}`, data);
+  return NextResponse.json(data);
 }

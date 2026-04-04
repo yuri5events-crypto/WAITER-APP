@@ -1,141 +1,161 @@
 "use client";
 import React, { useState, useEffect } from 'react';
-import { Users, Clock, CheckCircle, Shield, Edit2, X, RotateCcw, Save } from 'lucide-react';
+import { Users, Clock, Shield, Edit2, X, RotateCcw, Save, Palette, Settings } from 'lucide-react';
 
 export default function WaiterApp() {
+  const [roomId, setRoomId] = useState('1'); // ברירת מחדל חדר 1
   const [isAdmin, setIsAdmin] = useState(false);
   const [data, setData] = useState<any>(null);
   const [userName, setUserName] = useState('');
   const [loading, setLoading] = useState(true);
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
+  const [editDayId, setEditDayId] = useState<number | null>(null);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const room = params.get('r') || '1';
+    setRoomId(room);
+    const savedName = localStorage.getItem('waiter_name');
+    if (savedName) setUserName(savedName);
+    fetchData(room);
+  }, []);
 
-  const fetchData = async () => {
-    try {
-      const response = await fetch('/api/schedule');
-      const result = await response.json();
-      setData(result);
-      setNewTitle(result.title);
-    } catch (e) { console.error("טעינה נכשלה"); }
+  const fetchData = async (r: string) => {
+    const res = await fetch(`/api/schedule?room=${r}`);
+    setData(await res.json());
     setLoading(false);
   };
 
-  const addWaiter = async (dayName: string) => {
+  const handleAdminUpdate = async (payload: any) => {
+    const res = await fetch('/api/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'ADMIN_UPDATE', roomId, payload }),
+    });
+    setData(await res.json());
+    setEditDayId(null);
+  };
+
+  const register = async (dayName: string) => {
     if (!userName.trim()) return alert("נא להזין שם");
-    const response = await fetch('/api/schedule', {
+    localStorage.setItem('waiter_name', userName);
+    const res = await fetch('/api/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ waiterName: userName, day: dayName }),
+      body: JSON.stringify({ type: 'REGISTER', roomId, dayName, waiterName: userName }),
     });
-    setData(await response.json());
-    setUserName('');
+    setData(await res.json());
   };
 
-  const updateTitle = async () => {
-    const response = await fetch('/api/schedule', {
+  const resetDay = async (dayId: number) => {
+    if (!confirm("לאפס את כל הרשומים ליום זה?")) return;
+    const res = await fetch('/api/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'UPDATE_TITLE', title: newTitle }),
+      body: JSON.stringify({ type: 'RESET_DAY', roomId, dayId }),
     });
-    setData(await response.json());
-    setIsEditingTitle(false);
+    setData(await res.json());
   };
 
-  const toggleAdmin = () => {
-    if (!isAdmin) {
-      const pass = prompt("הכנס סיסמת מנהל:");
-      if (pass === "0908") setIsAdmin(true);
-      else if (pass !== null) alert("סיסמה שגויה");
-    } else {
-      setIsAdmin(false);
-    }
-  };
-
-  if (loading) return <div className="flex justify-center items-center h-screen font-bold text-amber-600">טוען מערכת...</div>;
+  if (loading) return <div className="p-10 text-center">טוען...</div>;
 
   return (
-    <div className="min-h-screen bg-slate-50 py-8 px-4" dir="rtl">
-      <div className="max-w-2xl mx-auto">
+    <div style={{ backgroundColor: data.bg_color || '#ffffff', color: data.text_color || '#000000' }} className="min-h-screen py-8 px-4 font-sans transition-colors duration-500" dir="rtl">
+      <div className="max-w-xl mx-auto">
         
-        <div className="bg-white rounded-3xl shadow-xl p-8 mb-8 border-b-8 border-amber-500 relative">
-          <div className="absolute top-4 left-4">
-             <button onClick={toggleAdmin} className={`${isAdmin ? 'text-amber-600' : 'text-gray-300'}`}>
-                <Shield size={22} />
-             </button>
-          </div>
-          <div className="text-center">
-            {isEditingTitle ? (
-              <div className="flex gap-2 justify-center items-center">
-                <input value={newTitle} onChange={(e)=>setNewTitle(e.target.value)} className="border-2 border-amber-200 rounded-xl px-4 py-2 text-xl font-bold text-center" />
-                <button onClick={updateTitle} className="bg-green-500 text-white p-2 rounded-xl"><CheckCircle size={24} /></button>
-              </div>
-            ) : (
-              <h1 className="text-4xl font-black text-slate-800 flex items-center justify-center gap-3">
-                {data?.title}
-                {isAdmin && <Edit2 size={20} className="cursor-pointer text-gray-400" onClick={()=>setIsEditingTitle(true)} />}
-              </h1>
-            )}
-            <p className="text-amber-600 mt-3 font-bold tracking-widest uppercase text-sm">Luxury Events Complex</p>
-          </div>
+        {/* Header */}
+        <div className="text-center mb-10 relative border-b pb-6 border-gray-200">
+           <button onClick={() => {
+             const p = prompt("סיסמה:");
+             if(p === "0908") setIsAdmin(!isAdmin);
+           }} className="absolute left-0 top-0 opacity-20 hover:opacity-100 transition-opacity">
+             <Shield size={20} />
+           </button>
+           
+           {isAdmin ? (
+             <div className="space-y-4 bg-gray-50 p-4 rounded-xl border border-dashed border-gray-300 mb-4 text-black">
+                <p className="font-bold text-sm">ניהול כותרת וצבעים:</p>
+                <input className="w-full p-2 border rounded" value={data.title} onChange={(e) => handleAdminUpdate({ title: e.target.value })} placeholder="כותרת" />
+                <div className="flex gap-4 justify-center">
+                   <label className="text-xs">רקע: <input type="color" value={data.bg_color} onChange={(e) => handleAdminUpdate({ bg_color: e.target.value })} /></label>
+                   <label className="text-xs">טקסט: <input type="color" value={data.text_color} onChange={(e) => handleAdminUpdate({ text_color: e.target.value })} /></label>
+                </div>
+                <div className="flex justify-center gap-2">
+                   {[1,2,3,4].map(num => (
+                     <button key={num} onClick={() => window.location.href = `?r=${num}`} className={`px-3 py-1 rounded text-xs ${roomId === String(num) ? 'bg-black text-white' : 'bg-gray-200'}`}>חדר {num}</button>
+                   ))}
+                </div>
+             </div>
+           ) : (
+             <h1 className="text-4xl font-light tracking-tight">{data.title}</h1>
+           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-2 mb-10 border-2 border-amber-100">
+        {/* Input */}
+        <div className="mb-10">
           <input
-            placeholder="מה השם שלך?"
+            placeholder="הכנס שם מלא"
             value={userName}
-            onChange={(e)=>setUserName(e.target.value)}
-            className="w-full bg-transparent px-6 py-4 text-xl font-bold focus:outline-none"
+            onChange={(e) => setUserName(e.target.value)}
+            className="w-full bg-transparent border-b-2 border-gray-300 py-3 text-2xl text-center focus:border-black outline-none transition-colors"
           />
         </div>
 
-        <div className="space-y-8">
-          {data?.days.map((day: any) => {
+        {/* List */}
+        <div className="space-y-12">
+          {data.days.map((day: any) => {
             const isFull = day.waiters.length >= day.limit;
-            const progress = (day.waiters.length / day.limit) * 100;
+            const isRegistered = day.waiters.includes(userName);
+
             return (
-              <div key={day.id} className="bg-white rounded-3xl shadow-md border border-slate-100 overflow-hidden">
-                <div className="p-8">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-3xl font-black text-slate-800">יום {day.name}</h2>
-                    <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-4 py-2 rounded-2xl font-bold border border-amber-100">
-                      <Clock size={18} /> {day.time}
-                    </div>
+              <div key={day.id} className="group border-b border-gray-100 pb-8 last:border-0">
+                <div className="flex justify-between items-end mb-4">
+                  <div>
+                    <h2 className="text-2xl font-medium">יום {day.name}</h2>
+                    <p className="text-sm opacity-60 flex items-center gap-1"><Clock size={14}/> {day.time}</p>
                   </div>
-
-                  <div className="mb-8">
-                    <div className="h-6 bg-slate-100 rounded-full p-1 shadow-inner">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-1000 ${progress > 85 ? 'bg-red-500' : 'bg-amber-500'}`}
-                        style={{ width: `${Math.min(progress, 100)}%` }}
-                      ></div>
-                    </div>
+                  <div className="text-left">
+                    <p className="text-xs uppercase tracking-widest opacity-40">מקומות שנותרו</p>
+                    <p className={`text-2xl font-light ${isFull ? 'text-red-500' : ''}`}>{day.limit - day.waiters.length}</p>
                   </div>
-
-                  <div className="flex flex-wrap gap-3 mb-8">
-                    {day.waiters.map((w: string, i: number) => (
-                      <div key={i} className="bg-amber-50 border border-amber-100 text-amber-900 px-4 py-2 rounded-2xl font-bold flex items-center gap-2">
-                        <div className="w-2 h-2 bg-amber-500 rounded-full"></div> {w}
-                      </div>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => addWaiter(day.name)}
-                    disabled={isFull}
-                    className={`w-full py-5 rounded-2xl font-black text-2xl shadow-xl flex items-center justify-center gap-3 ${
-                      isFull ? 'bg-slate-100 text-slate-400' : 'bg-amber-500 text-white hover:bg-amber-600'
-                    }`}
-                  >
-                    {isFull ? <X size={28} /> : <Users size={28} />}
-                    {isFull ? 'ההרשמה הסתיימה' : 'אני רוצה להירשם'}
-                  </button>
                 </div>
+
+                {/* Admin Row */}
+                {isAdmin && (
+                  <div className="bg-gray-50 p-3 rounded-lg mb-4 flex flex-wrap gap-2 items-center text-black">
+                     <input type="text" className="w-20 p-1 text-xs border rounded" value={day.time} onChange={(e) => {
+                        const newDays = data.days.map((d: any) => d.id === day.id ? {...d, time: e.target.value} : d);
+                        handleAdminUpdate({ days: newDays });
+                     }} />
+                     <input type="number" className="w-14 p-1 text-xs border rounded" value={day.limit} onChange={(e) => {
+                        const newDays = data.days.map((d: any) => d.id === day.id ? {...d, limit: parseInt(e.target.value)} : d);
+                        handleAdminUpdate({ days: newDays });
+                     }} />
+                     <button onClick={() => resetDay(day.id)} className="text-red-500 p-1 hover:bg-red-100 rounded"><RotateCcw size={16}/></button>
+                     <div className="w-full text-[10px] opacity-60">רשומים: {day.waiters.join(', ') || 'אין'}</div>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => register(day.name)}
+                  disabled={isFull || isRegistered || !userName}
+                  className={`w-full py-4 rounded-full border-2 transition-all font-bold ${
+                    isRegistered ? 'bg-black text-white border-black' : 
+                    isFull ? 'border-gray-200 text-gray-300' : 
+                    'border-black text-black hover:bg-black hover:text-white'
+                  }`}
+                >
+                  {isRegistered ? 'אתה רשום' : isFull ? 'ההרשמה נסגרה' : 'הירשם ליום זה'}
+                </button>
               </div>
             );
           })}
         </div>
+
+        <footer className="mt-20 py-10 border-t border-gray-100 text-center">
+           <p className="text-[10px] opacity-30 tracking-[0.2em] font-light">
+             מערכת ניהול צוות | בניה ופיתוח: בנימינוב יורי
+           </p>
+        </footer>
       </div>
     </div>
   );
